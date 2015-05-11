@@ -8,7 +8,7 @@
 
 #include "communication.h"
 
-#define NUM_SENDER NUM_QUEUES
+#define NUM_SENDER N_MODULE
 
 struct vars {
     uint32_t id;
@@ -23,7 +23,7 @@ void* send_thread(void * params)
 
     srand(time(NULL));
     for(i = 0; i < 20; i++) {
-        to_module = rand() % NUM_QUEUES;
+        to_module = rand() % N_MODULE;
         send_msg(make_msg(message, strlen(message)), to_module);
     }
 
@@ -52,17 +52,17 @@ void* recv_thread(void * params)
 
 int main()
 {
-	pthread_t sthreads[NUM_SENDER], rthreads[NUM_QUEUES];
+	pthread_t sthreads[NUM_SENDER], rthreads[N_MODULE];
 	void *retval;
-    init_queue_comm(NUM_QUEUES);
+    init_queue_comm(N_MODULE);
     uint32_t i;
-    struct vars v[NUM_QUEUES];
+    struct vars v[N_MODULE];
 	
     for (i = 0; i < NUM_SENDER; i++) {
         pthread_create(sthreads+i, NULL, send_thread, NULL);
     }
 
-    for (i = 0; i < NUM_QUEUES; i++) {
+    for (i = 0; i < N_MODULE; i++) {
         v[i].id = i;
         pthread_create(rthreads+i, NULL, recv_thread, (void *)(v+i));
     }
@@ -70,7 +70,7 @@ int main()
     for (i = 0; i < NUM_SENDER; i++) {
         pthread_join(sthreads[i], &retval);
     }
-    for (i = 0; i < NUM_QUEUES; i++) {
+    for (i = 0; i < N_MODULE; i++) {
         pthread_join(rthreads[i], &retval);
     }
 

@@ -7,17 +7,18 @@
 
 #include "communication.h"
 
-static struct bc_msg* module_msg_queues[NUM_QUEUES];
-static pthread_cond_t qready[NUM_QUEUES];
-static pthread_mutex_t qlock[NUM_QUEUES];
+static struct bc_msg_head module_msg_queues[N_MODULE];
 
 int init_queue_comm(uint32_t qsize)
 {
     uint32_t i;
+    struct bc_msg_head head;
 
     for (i = 0; i < qsize; i++) {
-        pthread_mutex_init(qlock + i, NULL);
-        pthread_cond_init(qready + i, NULL);
+        head = module_msg_queues[i];
+        pthread_mutex_init(&head.qlock, NULL);
+        pthread_cond_init(&head.qready, NULL);
+        head.next = NULL;
     }
 
     return 0;
@@ -48,15 +49,34 @@ void *del_msg(struct bc_msg *m)
 int send_msg(struct bc_msg *mp, uint32_t module_id)
 {
     int ret;
+    struct bc_msg *queue;
+    struct bc_msg_head *head;
+    pthread_cond_t qready;
+    pthread_mutex_t qlock;
 
-    if ((ret = pthread_mutex_lock(qlock + module_id)) != 0)
+    head = module_msg_queues+module_id;
+    qready = head->qready;
+    qlock = head->qlock;
+    queue = head->next;
+
+    if ((ret = pthread_mutex_lock(&qlock)) != 0)
         return 1;
-    mp->m_next = module_msg_queues[module_id];
-    module_msg_queues[module_id] = mp;
-    if ((ret = pthread_mutex_unlock(qlock + module_id)) != 0)
+
+    /* add mp to the end of queue */
+    if (queue == NULL) {
+        head->next = mp;
+    } else {
+        while(queue->m_next != NULL) {
+            queue = queue->m_next;
+        }
+        queue->m_next = mp;
+    }
+
+    if ((ret = pthread_mutex_unlock(&qlock)) != 0)
         return 1;
-    if ((ret = pthread_cond_signal(qready + module_id)) != 0)
+    if ((ret = pthread_cond_signal(&qready)) != 0)
         return 1;
+
     fprintf(stderr,"sent %d: %s, %d\n", module_id, mp->buf, mp->len);
 
     return 0;
@@ -65,16 +85,26 @@ int send_msg(struct bc_msg *mp, uint32_t module_id)
 int recv_msg(struct bc_msg **mp, uint32_t module_id, uint32_t *ev)
 {
     int ret;
+    struct bc_msg *queue;
+    struct bc_msg_head *head;
+    pthread_cond_t qready;
+    pthread_mutex_t qlock;
 
-    if ((ret = pthread_mutex_lock(qlock + module_id)) != 0)
+    head = module_msg_queues+module_id;
+    qready = head->qready;
+    qlock = head->qlock;
+
+    if ((ret = pthread_mutex_lock(&qlock)) != 0)
         return 1;
-    while (module_msg_queues[module_id] == NULL) {
-        pthread_cond_wait(qready + module_id, qlock + module_id);
+    while (head->next == NULL) {
+        pthread_cond_wait(&qready, &qlock);
     }
-    *mp = module_msg_queues[module_id];
-    module_msg_queues[module_id] = (*mp)->m_next;
+    /* get the first msg in the queue */
+    queue = head->next;
+    head->next = queue->m_next;
+    (*mp) = queue;
     (*mp)->m_next = NULL;
-    if ((ret = pthread_mutex_unlock(qlock + module_id)) != 0)
+    if ((ret = pthread_mutex_unlock(&qlock)) != 0)
         return 1;
     *ev = (*mp)->event;
 

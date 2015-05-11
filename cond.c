@@ -6,17 +6,21 @@
 #include <unistd.h>
 
 #define NUM_QUEUES 2
+#define NUM_SENDER 2
+#define NUM_RECVER 1
 
 
-struct msg {
-	char *buf;
+struct bc_msg {
+    uint32_t event;                /* 下面的bc_event事件 */
+    uint32_t session_id;           
     uint32_t len;
-    struct msg *m_next;
+	char *buf;
+    struct bc_msg *m_next;
 };
 
-void *del_msg(struct msg *m);
+void *del_msg(struct bc_msg *m);
 
-struct msg* module_msg_queues[NUM_QUEUES];
+struct bc_msg* module_msg_queues[NUM_QUEUES];
 pthread_cond_t qready[NUM_QUEUES];
 pthread_mutex_t qlock[NUM_QUEUES];
 
@@ -33,9 +37,9 @@ uint32_t init_queue_comm()
 
 void process_msg(char *buf, uint32_t *len, uint32_t module_id)
 {
-    struct msg *mp;
+    struct bc_msg *mp;
 
-    fprintf(stderr,"waiting msg for module %d...\n", module_id);
+//    fprintf(stderr,"waiting msg for module %d...\n", module_id);
     pthread_mutex_lock(qlock + module_id);
     while (module_msg_queues[module_id] == NULL) {
         pthread_cond_wait(qready + module_id, qlock + module_id);
@@ -43,76 +47,90 @@ void process_msg(char *buf, uint32_t *len, uint32_t module_id)
     mp = module_msg_queues[module_id];
     module_msg_queues[module_id] = mp->m_next;
     pthread_mutex_unlock(qlock + module_id);
-    printf("msg recv for module %d: %s\n", module_id, mp->buf);
+    fprintf(stderr, "msg recv for module %d: %s, %d\n", module_id, mp->buf, mp->len);
     del_msg(mp);
 }
 
-void enqueue_msg(struct msg *mp, uint32_t module_id)
+void enqueue_msg(struct bc_msg *mp, uint32_t module_id)
 {
     pthread_mutex_lock(qlock + module_id);
     mp->m_next = module_msg_queues[module_id];
     module_msg_queues[module_id] = mp;
     pthread_mutex_unlock(qlock + module_id);
     pthread_cond_signal(qready + module_id);
-    printf("message sent for module %d\n", module_id);
+    fprintf(stderr,"message sent for module %d: %s, %d\n", module_id, mp->buf, mp->len);
 }
 
-struct msg *make_msg(char *buf, uint32_t len)
+struct bc_msg *make_msg(char *buf, uint32_t len)
 {
-    struct msg *m;
+    struct bc_msg *m;
 
-    m = (struct msg *)malloc(sizeof(struct msg));
+    m = (struct bc_msg *)malloc(sizeof(struct bc_msg));
     m->buf = (char *)malloc(len);
     strncpy(m->buf, buf, len);
     m->len = len;
+    m->event = 0;
+    m->session_id = 0;
+    m->m_next = NULL;
 
     return m;
 }
 
-void *del_msg(struct msg *m)
+void *del_msg(struct bc_msg *m)
 {
     free(m->buf);
     free(m);
 }
 
 /* send message to a module */
-int send_msg(char *buf, uint32_t len, uint32_t module_id)
+int send_msg(struct bc_msg *msg, uint32_t module_id)
 {
-    enqueue_msg(make_msg(buf, len), module_id);
+    enqueue_msg(msg, module_id);
 
     return 0;
 }
 
-int recv_msg(char *buf, uint32_t *len, uint32_t module_id)
+int recv_msg(struct bc_msg **mp, uint32_t module_id, uint32_t *ev)
 {
-    process_msg(buf, len, module_id);
+    pthread_mutex_lock(qlock + module_id);
+    while (module_msg_queues[module_id] == NULL) {
+        pthread_cond_wait(qready + module_id, qlock + module_id);
+    }
+    *mp = module_msg_queues[module_id];
+    module_msg_queues[module_id] = (*mp)->m_next;
+    (*mp)->m_next = NULL;
+    pthread_mutex_unlock(qlock + module_id);
+    *ev = (*mp)->event;
 }
 
 
-void* start_func1(void * params)
+void* send_thread(void * params)
 {
     char *message = "hello,world";
     uint32_t i;
 
 
     for(i = 0; i < 2; i++) {
-        fprintf(stderr, "sending message: %s\n", message);
-        send_msg(message, strlen(message) - i, i % NUM_QUEUES);
+        send_msg(make_msg(message, strlen(message)), i % NUM_QUEUES);
     }
 
 
 	return NULL;
 }
 
-void* start_func2(void * params)
+void* recv_thread(void * params)
 {
-    char *message = "hello,world";
     char *buf;
     uint32_t len;
     uint32_t i;
+    struct bc_msg *m;
+    uint32_t event;
+    uint32_t module_id;
 
-    for (i = 0; i < 2; i++) {
-        recv_msg(buf, &len, i % NUM_QUEUES);
+    for (i = 0; i < 9; i++) {
+        module_id = i % NUM_QUEUES;
+        recv_msg(&m, module_id, &event);
+        fprintf(stderr, "msg recv for module %d: %s, %d, %d\n", module_id, m->buf, m->len, event);
     }
 
 	return NULL;
@@ -120,16 +138,24 @@ void* start_func2(void * params)
 
 int main()
 {
-	pthread_t thread1, thread2;
+	pthread_t sthreads[NUM_SENDER], rthreads[NUM_RECVER];
 	void *retval;
     init_queue_comm();
+    int i;
 	
-	pthread_create(&thread1, NULL, start_func1, NULL);
-    sleep(1);
-	pthread_create(&thread2, NULL, start_func2, NULL);
+    for (i = 0; i < NUM_SENDER; i++) {
+        pthread_create(sthreads+i, NULL, send_thread, NULL);
+    }
+    for (i = 0; i < NUM_RECVER; i++) {
+        pthread_create(rthreads+i, NULL, recv_thread, NULL);
+    }
 
-	pthread_join(thread2, &retval);
-	pthread_join(thread1, &retval);
+    for (i = 0; i < NUM_SENDER; i++) {
+        pthread_join(sthreads[i], &retval);
+    }
+    for (i = 0; i < NUM_RECVER; i++) {
+        pthread_join(rthreads[i], &retval);
+    }
 
 	return 0;
 }

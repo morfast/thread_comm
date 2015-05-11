@@ -24,7 +24,7 @@ void* send_thread(void * params)
     int ret;
 
     srand(time(NULL));
-    for(i = 0; i < 20; i++) {
+    for(i = 0; i < 900; i++) {
         to_module = rand() % N_MODULE;
         ret = send_msg(make_msg(message, strlen(message)), to_module);
         assert(ret == 0);
@@ -65,14 +65,14 @@ int main()
     init_queue_comm();
 	
 
+    for (i = 0; i < NUM_SENDER; i++) {
+        pthread_create(sthreads+i, NULL, send_thread, NULL);
+    }
     for (i = 0; i < N_MODULE; i++) {
         v[i].id = i;
         pthread_create(rthreads+i, NULL, recv_thread, (void *)(v+i));
     }
 
-    for (i = 0; i < NUM_SENDER; i++) {
-        pthread_create(sthreads+i, NULL, send_thread, NULL);
-    }
 
     for (i = 0; i < NUM_SENDER; i++) {
         pthread_join(sthreads[i], &retval);

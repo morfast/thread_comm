@@ -67,10 +67,10 @@ int send_msg(struct bc_msg *mp, uint32_t module_id)
     head = module_msg_queues+module_id;
     qready = &(head->qready);
     qlock = &(head->qlock);
-    msg = head->next;
 
     if ((ret = pthread_mutex_lock(qlock)) != 0)
         return 1;
+    msg = head->next;
 
     /* add mp to the end of queue */
     if (msg == NULL) {
@@ -83,8 +83,10 @@ int send_msg(struct bc_msg *mp, uint32_t module_id)
 
     if ((ret = pthread_mutex_unlock(qlock)) != 0)
         return 1;
-    if ((ret = pthread_cond_signal(qready)) != 0)
-        return 1;
+    //if (msg == NULL) {
+        if ((ret = pthread_cond_signal(qready)) != 0)
+            return 1;
+    //}
 
     fprintf(stderr,"sent %d: %s, %d\n", module_id, mp->buf, mp->len);
 

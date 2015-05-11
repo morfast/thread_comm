@@ -7,6 +7,19 @@ enum module_names {
     MODULE_3,
     MODULE_4,
     MODULE_5,
+    MODULE_6,
+    MODULE_7,
+    MODULE_8,
+    MODULE_9,
+    MODULE_11,
+    MODULE_12,
+    MODULE_13,
+    MODULE_14,
+    MODULE_15,
+    MODULE_16,
+    MODULE_17,
+    MODULE_18,
+    MODULE_19,
     N_MODULE
 };
 

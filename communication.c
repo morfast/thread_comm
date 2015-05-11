@@ -83,10 +83,10 @@ int send_msg(struct bc_msg *mp, uint32_t module_id)
 
     if ((ret = pthread_mutex_unlock(qlock)) != 0)
         return 1;
-    //if (msg == NULL) {
+    if (msg == NULL) {
         if ((ret = pthread_cond_signal(qready)) != 0)
             return 1;
-    //}
+    }
 
     fprintf(stderr,"sent %d: %s, %d\n", module_id, mp->buf, mp->len);
 

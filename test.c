@@ -26,7 +26,7 @@ void* send_thread(void * params)
     srand(time(NULL));
     for(i = 0; i < 900; i++) {
         to_module = rand() % N_MODULE;
-        ret = send_msg(make_msg(message, strlen(message)), to_module);
+        ret = send_msg(make_msg(message, strlen(message)+1), to_module);
         assert(ret == 0);
     }
 

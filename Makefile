@@ -4,3 +4,6 @@ a.out: communication.o test.c
 
 communication.o: communication.c communication.h
 	gcc -c -g -O0 communication.c 
+
+clean:
+	rm *.o a.out

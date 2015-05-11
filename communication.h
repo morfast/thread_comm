@@ -28,7 +28,7 @@ typedef struct bc_msg bc_msg_t;
 typedef struct bc_msg_head bc_msg_head_t;
 
 
-int init_queue_comm(uint32_t qsize);
+int init_queue_comm();
 struct bc_msg *make_msg(char *buf, uint32_t len);
 void *del_msg(struct bc_msg *m);
 int send_msg(struct bc_msg *mp, uint32_t module_id);

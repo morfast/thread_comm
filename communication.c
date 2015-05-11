@@ -9,12 +9,12 @@
 
 static struct bc_msg_head module_msg_queues[N_MODULE];
 
-int init_queue_comm(uint32_t qsize)
+int init_queue_comm()
 {
     uint32_t i;
     struct bc_msg_head head;
 
-    for (i = 0; i < qsize; i++) {
+    for (i = 0; i < N_MODULE; i++) {
         head = module_msg_queues[i];
         pthread_mutex_init(&head.qlock, NULL);
         pthread_cond_init(&head.qready, NULL);

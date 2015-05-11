@@ -54,9 +54,10 @@ int main()
 {
 	pthread_t sthreads[NUM_SENDER], rthreads[N_MODULE];
 	void *retval;
-    init_queue_comm(N_MODULE);
     uint32_t i;
     struct vars v[N_MODULE];
+
+    init_queue_comm();
 	
     for (i = 0; i < NUM_SENDER; i++) {
         pthread_create(sthreads+i, NULL, send_thread, NULL);

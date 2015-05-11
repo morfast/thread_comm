@@ -22,6 +22,7 @@ struct bc_msg_head {
     pthread_cond_t qready;
     pthread_mutex_t qlock;
     struct bc_msg *next;
+    struct bc_msg *end;
 };
 
 typedef struct bc_msg bc_msg_t;

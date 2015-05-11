@@ -19,6 +19,7 @@ int init_queue_comm()
         pthread_mutex_init(&head.qlock, NULL);
         pthread_cond_init(&head.qready, NULL);
         head.next = NULL;
+        head.end = NULL;
     }
 
     return 0;
@@ -65,11 +66,10 @@ int send_msg(struct bc_msg *mp, uint32_t module_id)
     /* add mp to the end of queue */
     if (queue == NULL) {
         head->next = mp;
+        head->end = mp;
     } else {
-        while(queue->m_next != NULL) {
-            queue = queue->m_next;
-        }
-        queue->m_next = mp;
+        head->end->m_next = mp;
+        head->end = mp;
     }
 
     if ((ret = pthread_mutex_unlock(&qlock)) != 0)
@@ -102,6 +102,9 @@ int recv_msg(struct bc_msg **mp, uint32_t module_id, uint32_t *ev)
     /* get the first msg in the queue */
     queue = head->next;
     head->next = queue->m_next;
+    if (head->next == NULL) {
+        head->end = NULL;
+    }
     (*mp) = queue;
     (*mp)->m_next = NULL;
     if ((ret = pthread_mutex_unlock(&qlock)) != 0)

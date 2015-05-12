@@ -25,21 +25,6 @@ int init_queue_comm()
     return 0;
 }
         
-struct bc_msg *make_msg(char *buf, uint32_t len)
-{
-    struct bc_msg *m;
-
-    m = (struct bc_msg *)malloc(sizeof(struct bc_msg));
-    m->buf = (char *)malloc(len);
-    strncpy(m->buf, buf, len);
-    m->len = len;
-    m->event = 0;
-    m->session_id = 0;
-    m->m_next = NULL;
-
-    return m;
-}
-
 void *del_msg(struct bc_msg *m)
 {
     free(m->buf);
@@ -47,22 +32,30 @@ void *del_msg(struct bc_msg *m)
 }
 
 /* send message to a module */
-int send_msg(struct bc_msg *mp, uint32_t module_id)
+int send_msg(uint32_t module_id, uint32_t event, uint32_t session_id, char *buf, int buf_len)
 {
+    struct bc_msg *mp;
     int ret;
     struct bc_msg *msg;
     struct bc_msg_head *head;
     pthread_cond_t *qready;
     pthread_mutex_t *qlock;
 
-    if (mp == NULL) {
-        fprintf(stderr, "msg NULL\n");
-        return 1;
-    }
     if (module_id < 0 || module_id >= N_MODULE) {
         fprintf(stderr, "module_id error in send_msg\n");
         return 1;
     }
+
+    mp = (struct bc_msg *)malloc(sizeof(struct bc_msg));
+    if (mp == NULL) {
+        fprintf(stderr, "message malloc error\n");
+        return 1;
+    }
+    mp->event = event;
+    mp->session_id = session_id;
+    mp->buf = buf;
+    mp->len = buf_len;
+    mp->m_next = NULL;
 
     head = module_msg_queues+module_id;
     qready = &(head->qready);
@@ -88,12 +81,11 @@ int send_msg(struct bc_msg *mp, uint32_t module_id)
             return 1;
     }
 
-    fprintf(stderr,"sent %d: %s, %d\n", module_id, mp->buf, mp->len);
 
     return 0;
 }
 
-int recv_msg(struct bc_msg **mp, uint32_t module_id, uint32_t *ev)
+int recv_msg(uint32_t module_id, struct bc_msg **mp)
 {
     int ret;
     struct bc_msg *msg;
@@ -113,7 +105,6 @@ int recv_msg(struct bc_msg **mp, uint32_t module_id, uint32_t *ev)
     if ((ret = pthread_mutex_lock(qlock)) != 0)
         return 1;
     while (head->next == NULL) {
-        printf("waiting in %d\n", module_id);
         pthread_cond_wait(qready, qlock);
     }
     /* get the first msg in the queue */
@@ -126,7 +117,6 @@ int recv_msg(struct bc_msg **mp, uint32_t module_id, uint32_t *ev)
     (*mp)->m_next = NULL;
     if ((ret = pthread_mutex_unlock(qlock)) != 0)
         return 1;
-    *ev = (*mp)->event;
 
     return 0;
 }
